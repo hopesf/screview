@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "verbatimModuleSyntax": true,
+    "declaration": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "rootDir": ".",
+    "types": ["node"]
+  },
+  "include": ["src", "tests", "tsup.config.ts", "vitest.config.ts"]
+}
