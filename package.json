@@ -24,7 +24,7 @@
     "node": ">=20"
   },
   "bin": {
-    "screview": "./dist/cli.js"
+    "screview": "dist/cli.js"
   },
   "exports": {
     ".": {

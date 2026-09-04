@@ -125,4 +125,18 @@ function useState(v: number): [number, (n: number) => void] { return [v, () => {
       }),
     ).toHaveLength(1);
   });
+
+  it('does not flag an unrelated setX helper during render', () => {
+    expect(
+      runRule(noStateUpdateInRender, {
+        filename: 'Box.tsx',
+        code: `function Box() {
+  setTitle('hi');
+  return <div />;
+}
+function setTitle(_t: string) {}
+`,
+      }),
+    ).toHaveLength(0);
+  });
 });

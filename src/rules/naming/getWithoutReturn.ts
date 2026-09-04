@@ -1,6 +1,6 @@
 import { Node, SyntaxKind } from 'ts-morph';
 import type { Rule } from '../../core/types';
-import { functionName, getFunctionBody, isFunctionLike } from '../../utils/ast';
+import { functionName, getFunctionBody, isExpressHandler, isFunctionLike } from '../../utils/ast';
 
 export const getWithoutReturn: Rule = {
   id: 'naming/get-without-return',
@@ -12,6 +12,7 @@ export const getWithoutReturn: Rule = {
       if (!isFunctionLike(node)) return;
       const name = functionName(node);
       if (!name || !/^get[A-Z]/.test(name)) return;
+      if (isExpressHandler(node)) return;
       if (returnsValue(node)) return;
       ctx.report(node, `"${name}" is named like a getter but it never returns a value.`);
     };

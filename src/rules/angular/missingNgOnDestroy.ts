@@ -1,6 +1,8 @@
-import { Node, SyntaxKind, type ClassDeclaration } from 'ts-morph';
+import { Node, SyntaxKind, type CallExpression, type ClassDeclaration } from 'ts-morph';
 import type { Rule } from '../../core/types';
 import { getCalleeName, hasDecorator } from '../../utils/ast';
+
+const DESTROY_OPS = new Set(['takeUntil', 'takeUntilDestroyed', 'take', 'first', 'takeWhile']);
 
 export const missingNgOnDestroy: Rule = {
   id: 'angular/missing-ngondestroy',
@@ -24,11 +26,26 @@ export const missingNgOnDestroy: Rule = {
 };
 
 function needsDestroy(cls: ClassDeclaration): boolean {
-  const text = cls.getText();
-  if (/\bSubscription\b/.test(text) && /subscribe\s*\(/.test(text)) return true;
   for (const call of cls.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    if (!Node.isCallExpression(call)) continue;
     const name = getCalleeName(call);
     if (name === 'setInterval' || name === 'addEventListener') return true;
+    if (name === 'subscribe' && !hasDestroyOperator(call)) return true;
   }
   return false;
+}
+
+function hasDestroyOperator(subscribe: CallExpression): boolean {
+  const expr = subscribe.getExpression();
+  if (!Node.isPropertyAccessExpression(expr)) return false;
+  const target = expr.getExpression();
+  if (!Node.isCallExpression(target) || getCalleeName(target) !== 'pipe') return false;
+  return target.getArguments().some((arg) => {
+    const op = Node.isCallExpression(arg)
+      ? getCalleeName(arg)
+      : Node.isIdentifier(arg)
+        ? arg.getText()
+        : undefined;
+    return op !== undefined && DESTROY_OPS.has(op);
+  });
 }

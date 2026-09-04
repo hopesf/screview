@@ -131,9 +131,21 @@ export function isExpressHandler(fn: Node): boolean {
   const names = params.map((p) => p.getName().toLowerCase());
   const req = names[0] === 'req' || names[0] === 'request';
   const res = names[1] === 'res' || names[1] === 'response';
-  if (req && res) return true;
   const types = params.map((p) => p.getTypeNode()?.getText() ?? '');
-  return types[0]?.includes('Request') === true && types[1]?.includes('Response') === true;
+  const typed = types[0]?.includes('Request') === true && types[1]?.includes('Response') === true;
+  if (!((req && res) || typed)) return false;
+  if (typed) return true;
+  return fileHasExpressSignal(fn.getSourceFile());
+}
+
+export function fileHasExpressSignal(sourceFile: SourceFile): boolean {
+  if (/\.(controller|routes|router|middleware)\.[cm]?[jt]sx?$/i.test(sourceFile.getFilePath())) {
+    return true;
+  }
+  return sourceFile.getImportDeclarations().some((imp) => {
+    const spec = imp.getModuleSpecifierValue();
+    return spec === 'express' || spec.startsWith('express/');
+  });
 }
 
 function getParameters(fn: Node) {

@@ -1,0 +1,7 @@
+{
+  "name": "gold-angular",
+  "private": true,
+  "dependencies": {
+    "@angular/core": "19.0.0"
+  }
+}

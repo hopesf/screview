@@ -9,7 +9,8 @@ describe('express/noSwallowedError', () => {
     expect(
       runRule(noSwallowedError, {
         filename: 'user.controller.ts',
-        code: `function getUser(req, res, next) { try { res.json(1); } catch (err) { next(err); } }`,
+        code: `import type { Request, Response, NextFunction } from 'express';
+function getUser(req: Request, res: Response, next: NextFunction) { try { res.json(1); } catch (err) { next(err); } }`,
       }),
     ).toHaveLength(0);
   });
@@ -17,7 +18,8 @@ describe('express/noSwallowedError', () => {
   it('allows rethrow', () => {
     expect(
       runRule(noSwallowedError, {
-        code: `function getUser(req, res, next) { try { res.json(1); } catch (err) { throw err; } }`,
+        code: `import type { Request, Response, NextFunction } from 'express';
+function getUser(req: Request, res: Response, next: NextFunction) { try { res.json(1); } catch (err) { throw err; } }`,
       }),
     ).toHaveLength(0);
   });
@@ -25,7 +27,8 @@ describe('express/noSwallowedError', () => {
   it('flags empty catch in handler', () => {
     expect(
       runRule(noSwallowedError, {
-        code: `function getUser(req, res, next) { try { res.json(1); } catch (err) {} }`,
+        code: `import type { Request, Response, NextFunction } from 'express';
+function getUser(req: Request, res: Response, next: NextFunction) { try { res.json(1); } catch (err) {} }`,
       }),
     ).toHaveLength(1);
   });
@@ -33,7 +36,8 @@ describe('express/noSwallowedError', () => {
   it('flags catch that only logs', () => {
     expect(
       runRule(noSwallowedError, {
-        code: `function getUser(req, res) { try { res.json(1); } catch (err) { console.log(err); } }`,
+        code: `import type { Request, Response } from 'express';
+function getUser(req: Request, res: Response) { try { res.json(1); } catch (err) { console.log(err); } }`,
       }),
     ).toHaveLength(1);
   });
@@ -43,7 +47,9 @@ describe('express/missingAsyncErrorHandling', () => {
   it('allows awaited work in try/catch', () => {
     expect(
       runRule(missingAsyncErrorHandling, {
-        code: `async function getUser(req, res, next) { try { await load(); res.json(1); } catch (err) { next(err); } }\nasync function load() {}`,
+        code: `import type { Request, Response, NextFunction } from 'express';
+async function getUser(req: Request, res: Response, next: NextFunction) { try { await load(); res.json(1); } catch (err) { next(err); } }
+async function load() {}`,
       }),
     ).toHaveLength(0);
   });
@@ -59,15 +65,35 @@ describe('express/missingAsyncErrorHandling', () => {
   it('flags await without try', () => {
     expect(
       runRule(missingAsyncErrorHandling, {
-        code: `async function getUser(req, res) { const user = await load(); res.json(user); }\nasync function load() { return 1; }`,
+        code: `import type { Request, Response } from 'express';
+async function getUser(req: Request, res: Response) { const user = await load(); res.json(user); }
+async function load() { return 1; }`,
       }),
     ).toHaveLength(1);
+  });
+
+  it('allows await without try when the handler is passed to asyncHandler', () => {
+    expect(
+      runRule(missingAsyncErrorHandling, {
+        code: `import type { Request, Response } from 'express';
+async function login(req: Request, res: Response) { const user = await load(); res.json(user); }
+asyncHandler(login);
+asyncHandler(authController.refresh);
+async function load() { return 1; }
+function asyncHandler(_fn: unknown) { return _fn; }
+const authController = { refresh() {} };
+`,
+      }),
+    ).toHaveLength(0);
   });
 
   it('flags multiple uncovered awaits', () => {
     expect(
       runRule(missingAsyncErrorHandling, {
-        code: `async function getUser(req, res) { await a(); await b(); res.end(); }\nasync function a() {}\nasync function b() {}`,
+        code: `import type { Request, Response } from 'express';
+async function getUser(req: Request, res: Response) { await a(); await b(); res.end(); }
+async function a() {}
+async function b() {}`,
       }).length,
     ).toBeGreaterThan(0);
   });
@@ -77,7 +103,8 @@ describe('express/noResponseMissing', () => {
   it('allows res.json', () => {
     expect(
       runRule(noResponseMissing, {
-        code: `function getUser(req, res) { res.json({ ok: true }); }`,
+        code: `import type { Request, Response } from 'express';
+function getUser(req: Request, res: Response) { res.json({ ok: true }); }`,
       }),
     ).toHaveLength(0);
   });
@@ -85,7 +112,8 @@ describe('express/noResponseMissing', () => {
   it('allows next()', () => {
     expect(
       runRule(noResponseMissing, {
-        code: `function getUser(req, res, next) { next(); }`,
+        code: `import type { Request, Response, NextFunction } from 'express';
+function getUser(req: Request, res: Response, next: NextFunction) { next(); }`,
       }),
     ).toHaveLength(0);
   });
@@ -93,7 +121,8 @@ describe('express/noResponseMissing', () => {
   it('flags handler with no response', () => {
     expect(
       runRule(noResponseMissing, {
-        code: `function getUser(req, res) { const id = req.params.id; }`,
+        code: `import type { Request, Response } from 'express';
+function getUser(req: Request, res: Response) { const id = req.params.id; }`,
       }),
     ).toHaveLength(1);
   });
@@ -102,6 +131,29 @@ describe('express/noResponseMissing', () => {
     expect(
       runRule(noResponseMissing, {
         code: `function add(a: number, b: number) { return a + b; }`,
+      }),
+    ).toHaveLength(0);
+  });
+
+  it('ignores req/res helpers in files that do not import express', () => {
+    expect(
+      runRule(noResponseMissing, {
+        code: `function copy(req, res) { const id = req.id; return id; }`,
+      }),
+    ).toHaveLength(0);
+  });
+
+  it('allows an asyncHandler wrapper that forwards to next via catch', () => {
+    expect(
+      runRule(noResponseMissing, {
+        filename: 'asyncHandler.ts',
+        code: `import type { NextFunction, Request, Response } from 'express';
+export function asyncHandler(handler: (req: Request, res: Response, next: NextFunction) => Promise<void>) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    void handler(req, res, next).catch(next);
+  };
+}
+`,
       }),
     ).toHaveLength(0);
   });

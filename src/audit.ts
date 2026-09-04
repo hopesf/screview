@@ -4,10 +4,12 @@ import type { AuditOptions, AuditResult, ScreviewConfig } from './core/types';
 import { loadConfig } from './core/config';
 import { createAuditProject } from './core/project';
 import { runEngine } from './core/engine';
-import { selectRules } from './core/registry';
-import { analyzeStructure } from './structure/analyzeStructure';
+import { selectProgramRules, selectRules } from './core/registry';
+import { runProgramRules } from './core/programEngine';
+import { detectProject } from './core/detectProject';
+import { applyBaseline, writeBaseline } from './core/baseline';
 
-export async function audit(paths: string[], options: AuditOptions = {}): Promise<AuditResult> {
+export async function audit(paths: string[] = [], options: AuditOptions = {}): Promise<AuditResult> {
   const cwd = options.cwd ?? process.cwd();
   const started = performance.now();
   const config = mergeOptions(loadConfig(cwd), options);
@@ -17,15 +19,31 @@ export async function audit(paths: string[], options: AuditOptions = {}): Promis
     ignore: config.ignore,
     cwd,
   });
-  const findings = [
-    ...runEngine(project.getSourceFiles(), selectRules(config), cwd),
-    ...analyzeStructure(filePaths, cwd, config),
+  const profile = detectProject(cwd, filePaths);
+  const sourceFiles = project.getSourceFiles();
+  let findings = [
+    ...runEngine(sourceFiles, selectRules(config, profile), cwd),
+    ...(await runProgramRules(selectProgramRules(config, profile), {
+      sourceFiles,
+      filePaths,
+      cwd,
+      config,
+      profile,
+    })),
   ];
+  const baselineFile = path.resolve(cwd, options.baselineFile ?? '.screview-baseline.json');
+  if (options.writeBaseline) {
+    writeBaseline(baselineFile, findings);
+  } else if (options.baseline) {
+    findings = applyBaseline(findings, baselineFile);
+  }
   return {
     findings,
-    filesScanned: project.getSourceFiles().length,
+    filesScanned: sourceFiles.length,
     durationMs: Math.round(performance.now() - started),
     cwd,
+    language: profile.language,
+    frameworks: profile.frameworks,
   };
 }
 

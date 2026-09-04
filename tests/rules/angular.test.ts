@@ -3,6 +3,7 @@ import { runRule } from '../helpers/ruleTester';
 import { unsubscribedObservable } from '../../src/rules/angular/unsubscribedObservable';
 import { missingNgOnDestroy } from '../../src/rules/angular/missingNgOnDestroy';
 import { noUncleanedTimer } from '../../src/rules/angular/noUncleanedTimer';
+import { noUncleanedSocket } from '../../src/rules/angular/noUncleanedSocket';
 
 const DECORATORS = `
 declare function Component(c: object): ClassDecorator;
@@ -110,6 +111,23 @@ class UserComponent { name = 'a'; }
     ).toHaveLength(0);
   });
 
+  it('allows takeUntilDestroyed without ngOnDestroy', () => {
+    expect(
+      runRule(missingNgOnDestroy, {
+        filename: 'user.component.ts',
+        code: `${DECORATORS}
+@Component({ selector: 'app-user', template: '' })
+class UserComponent {
+  constructor(private user$: { pipe(..._a: unknown[]): { subscribe(): void } }) {
+    this.user$.pipe(takeUntilDestroyed()).subscribe();
+  }
+}
+function takeUntilDestroyed() { return 1; }
+`,
+      }),
+    ).toHaveLength(0);
+  });
+
   it('flags subscription without ngOnDestroy', () => {
     expect(
       runRule(missingNgOnDestroy, {
@@ -196,6 +214,127 @@ class UserComponent {
 @Component({ selector: 'app-user', template: '' })
 class UserComponent {
   ngOnInit() { window.addEventListener('resize', () => {}); }
+}
+`,
+      }),
+    ).toHaveLength(1);
+  });
+
+  it('does not treat a string mention of clearInterval as cleanup', () => {
+    expect(
+      runRule(noUncleanedTimer, {
+        filename: 'user.component.ts',
+        code: `${DECORATORS}
+@Component({ selector: 'app-user', template: '' })
+class UserComponent {
+  ngOnInit() { setInterval(() => {}, 1000); }
+  ngOnDestroy() { const hint = 'call clearInterval later'; }
+}
+`,
+      }),
+    ).toHaveLength(1);
+  });
+});
+
+describe('angular/noUncleanedSocket', () => {
+  it('allows webSocketService.on with off in ngOnDestroy', () => {
+    expect(
+      runRule(noUncleanedSocket, {
+        filename: 'user.component.ts',
+        code: `${DECORATORS}
+@Component({ selector: 'app-user', template: '' })
+class UserComponent {
+  constructor(private webSocketService: { on(e: string, h: () => void): void; off(e: string, h: () => void): void }) {}
+  ngOnInit() { this.webSocketService.on('gps', this.onGps); }
+  ngOnDestroy() { this.webSocketService.off('gps', this.onGps); }
+  onGps() {}
+}
+`,
+      }),
+    ).toHaveLength(0);
+  });
+
+  it('allows off inside destroyRef.onDestroy', () => {
+    expect(
+      runRule(noUncleanedSocket, {
+        filename: 'user.component.ts',
+        code: `${DECORATORS}
+@Component({ selector: 'app-user', template: '' })
+class UserComponent {
+  constructor(
+    private webSocketService: { on(e: string, h: () => void): void; off(e: string, h: () => void): void },
+    private destroyRef: { onDestroy(fn: () => void): void },
+  ) {
+    this.destroyRef.onDestroy(() => {
+      this.webSocketService.off('gps', this.onGps);
+    });
+  }
+  attach() { this.webSocketService.on('gps', this.onGps); }
+  onGps() {}
+}
+`,
+      }),
+    ).toHaveLength(0);
+  });
+
+  it('ignores map.on', () => {
+    expect(
+      runRule(noUncleanedSocket, {
+        filename: 'user.component.ts',
+        code: `${DECORATORS}
+@Component({ selector: 'app-user', template: '' })
+class UserComponent {
+  map: { on(e: string, h: () => void): void };
+  ngOnInit() { this.map.on('load', () => {}); }
+}
+`,
+      }),
+    ).toHaveLength(0);
+  });
+
+  it('flags webSocketService.on without off', () => {
+    expect(
+      runRule(noUncleanedSocket, {
+        filename: 'user.component.ts',
+        code: `${DECORATORS}
+@Component({ selector: 'app-user', template: '' })
+class UserComponent {
+  constructor(private webSocketService: { on(e: string, h: () => void): void }) {}
+  ngOnInit() { this.webSocketService.on('gps', this.onGps); }
+  onGps() {}
+}
+`,
+      }),
+    ).toHaveLength(1);
+  });
+
+  it('flags on attached after async load', () => {
+    expect(
+      runRule(noUncleanedSocket, {
+        filename: 'user.component.ts',
+        code: `${DECORATORS}
+@Component({ selector: 'app-user', template: '' })
+class UserComponent {
+  constructor(private webSocketService: { on(e: string, h: () => void): void }) {}
+  load() { this.webSocketService.on('gps', this.onGps); }
+  onGps() {}
+}
+`,
+      }),
+    ).toHaveLength(1);
+  });
+
+  it('does not treat a string mention of off as cleanup', () => {
+    expect(
+      runRule(noUncleanedSocket, {
+        filename: 'user.component.ts',
+        code: `${DECORATORS}
+@Component({ selector: 'app-user', template: '' })
+class UserComponent {
+  constructor(private webSocketService: { on(e: string, h: () => void): void }) {}
+  ngOnInit() { this.webSocketService.on('gps', this.onGps); }
+  ngOnDestroy() { const hint = 'call off later'; }
+  onGps() {}
 }
 `,
       }),

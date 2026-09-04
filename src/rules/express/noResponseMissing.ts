@@ -1,4 +1,4 @@
-import { Node, SyntaxKind } from 'ts-morph';
+import { Node, SyntaxKind, type CallExpression } from 'ts-morph';
 import type { Rule } from '../../core/types';
 import { isExpressHandler, isFunctionLike, isNextCall, isResponseCall, getFunctionBody } from '../../utils/ast';
 
@@ -19,7 +19,7 @@ export const noResponseMissing: Rule = {
           return;
         }
         if (!Node.isCallExpression(child)) return;
-        if (isResponseCall(child) || isNextCall(child)) sends = true;
+        if (isResponseCall(child) || isNextCall(child) || forwardsToCatchNext(child)) sends = true;
       });
       if (!sends) {
         ctx.report(node, 'Express handler never sends a response or calls next(). The request will hang.', {
@@ -37,3 +37,10 @@ export const noResponseMissing: Rule = {
     };
   },
 };
+
+function forwardsToCatchNext(call: CallExpression): boolean {
+  const expr = call.getExpression();
+  if (!Node.isPropertyAccessExpression(expr) || expr.getName() !== 'catch') return false;
+  const arg = call.getArguments()[0];
+  return arg !== undefined && Node.isIdentifier(arg) && arg.getText() === 'next';
+}

@@ -2,7 +2,18 @@ import type { Node, SourceFile } from 'ts-morph';
 import type { SyntaxKind } from 'ts-morph';
 
 export type Severity = 'critical' | 'warning' | 'info';
-export type Framework = 'generic' | 'express' | 'angular' | 'react' | 'mongo' | 'style' | 'naming' | 'structure';
+export type RuleLevel = 'off' | Severity;
+export type FailOn = 'critical' | 'warning' | 'all';
+export type Framework =
+  | 'generic'
+  | 'express'
+  | 'angular'
+  | 'react'
+  | 'mongo'
+  | 'db'
+  | 'style'
+  | 'naming'
+  | 'structure';
 
 export interface Finding {
   ruleId: string;
@@ -18,6 +29,7 @@ export interface Finding {
 export interface RuleContext {
   sourceFile: SourceFile;
   filePath: string;
+  wrappedHandlers: Set<string>;
   report(
     node: Node,
     message: string,
@@ -35,17 +47,39 @@ export interface Rule {
   create(ctx: RuleContext): Visitors;
 }
 
+export interface ProgramContext {
+  sourceFiles: SourceFile[];
+  filePaths: string[];
+  cwd: string;
+  config: ScreviewConfig;
+  profile: {
+    language: 'typescript' | 'javascript';
+    frameworks: Array<'express' | 'angular' | 'react' | 'mongo' | 'db'>;
+  };
+}
+
+export interface ProgramRule {
+  id: string;
+  pack: Framework;
+  severity: Severity;
+  docs: string;
+  run(ctx: ProgramContext): Finding[] | Promise<Finding[]>;
+}
+
 export interface ScreviewConfig {
   include: string[];
   ignore: string[];
-  rules: Record<string, 'off'>;
+  rules: Record<string, RuleLevel>;
 }
 
 export interface AuditOptions {
   cwd?: string;
   ignore?: string[];
-  rules?: Record<string, 'off'>;
+  rules?: Record<string, RuleLevel>;
   color?: boolean;
+  baseline?: boolean;
+  writeBaseline?: boolean;
+  baselineFile?: string;
 }
 
 export interface AuditResult {
@@ -53,4 +87,6 @@ export interface AuditResult {
   filesScanned: number;
   durationMs: number;
   cwd: string;
+  language: 'typescript' | 'javascript';
+  frameworks: Array<'express' | 'angular' | 'react' | 'mongo' | 'db'>;
 }

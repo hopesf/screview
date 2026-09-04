@@ -2,6 +2,7 @@ import type { Node, SourceFile } from 'ts-morph';
 import type { Finding, Rule } from './types';
 import { isSuppressed } from './suppress';
 import { displayPath, snippetOf } from '../utils/ast';
+import { collectWrappedHandlers } from './wrappedHandlers';
 
 export function runEngine(
   sourceFiles: SourceFile[],
@@ -9,6 +10,7 @@ export function runEngine(
   cwd: string,
 ): Finding[] {
   const findings: Finding[] = [];
+  const wrappedHandlers = collectWrappedHandlers(sourceFiles);
 
   for (const sourceFile of sourceFiles) {
     const filePath = displayPath(sourceFile.getFilePath(), cwd);
@@ -18,6 +20,7 @@ export function runEngine(
       const visitors = rule.create({
         sourceFile,
         filePath,
+        wrappedHandlers,
         report(node, message, extra) {
           if (isSuppressed(sourceFile, node, rule.id)) return;
           const pos = node.getStart(false);

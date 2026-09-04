@@ -5,6 +5,8 @@ export function renderJson(result: AuditResult): string {
     {
       filesScanned: result.filesScanned,
       durationMs: result.durationMs,
+      language: result.language,
+      frameworks: result.frameworks,
       findings: result.findings,
     },
     null,

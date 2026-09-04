@@ -6,3 +6,7 @@ coverage
 .env
 .idea
 .vscode
+.cursor
+examples/*
+!examples/README.md
+!examples/pull.sh
