@@ -7,7 +7,11 @@
     "ai",
     "static-analysis",
     "typescript",
-    "ast"
+    "javascript",
+    "ast",
+    "linter",
+    "cli",
+    "nodejs"
   ],
   "license": "MIT",
   "author": "hopesf",
