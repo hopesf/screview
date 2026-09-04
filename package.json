@@ -1,6 +1,6 @@
 {
   "name": "screview",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Catch junk AI agents leave in TypeScript and JavaScript.",
   "keywords": [
     "code-review",
